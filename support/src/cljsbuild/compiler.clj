@@ -55,13 +55,29 @@
       (try
         (binding [*assert* assert?]
           (build (SourcePaths. cljs-paths) compiler-options))
+        (when-let [ast-out (:ast-output-to compiler-options)]
+          (let [whitelist-re (when (:ast-whitelist compiler-options)
+                               (re-pattern compiler-options))
+                nss (->> @analyzer/namespaces
+                         keys)
+                nss (if whitelist-re
+                      (filter #(re-find whitelist-re (str %)) nss)
+                      nss)
+                output-file (java.io.File ast-out)
+                output-file (if (.isDirectory output-file)
+                              (-> ast-out
+                                  (str "/ast.edn")
+                                  (java.io.File.))
+                              output-file)
+                ast-map (select-keys @analyzer/namespaces nss)]
+            (spit output-file (pr-str ast-map))))
         (notify-cljs
-          notify-command
-          (str "Successfully compiled \"" output-file "\" in " (elapsed started-at) ".") green)
+         notify-command
+         (str "Successfully compiled \"" output-file "\" in " (elapsed started-at) ".") green)
         (catch Throwable e
           (notify-cljs
-            notify-command
-            (str "Compiling \"" output-file "\" failed.") red)
+           notify-command
+           (str "Compiling \"" output-file "\" failed.") red)
           (pst+ e))))))
 
 (defn- get-mtimes [paths]
